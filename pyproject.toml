@@ -25,8 +25,14 @@ explicit = true
 dev = [ "pytest>=8.4.2", "pytest-cov>=4.0.0", "black>=23.0.0", "flake8>=6.0.0", "mypy>=1.0.0",]
 
 [project.optional-dependencies]
-webui = [ "gradio==5.44.1",]
-deepspeed = [ "deepspeed==0.17.1",]
+# To install the WebUI support, use `uv sync --extra webui` (or `--all-extras`).
+webui = [
+  "gradio==5.45.0",
+]
+# To install the DeepSpeed support, use `uv sync --extra deepspeed` (or `--all-extras`).
+deepspeed = [
+  "deepspeed==0.17.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/cs2764/index-tts2-ext"

@@ -163,13 +163,7 @@ with open("examples/cases.jsonl", "r", encoding="utf-8") as f:
                              example.get("emo_text") is not None]
                              )
 
-def normalize_emo_vec(emo_vec):
-    # emotion factors for better user experience
-    k_vec = [0.75,0.70,0.80,0.80,0.75,0.75,0.55,0.45]
-    tmp = np.array(k_vec) * np.array(emo_vec)
-    if np.sum(tmp) > 0.8:
-        tmp = tmp * 0.8/ np.sum(tmp)
-    return tmp.tolist()
+
 
 def process_uploaded_file(file_path, use_native_chapters, file_cleaning_enabled, chapter_recognition_enabled):
     """Process uploaded file with new toggle system."""
@@ -721,7 +715,7 @@ def gen_single(emo_control_method, voice_selection, prompt, text,
         pass
     if emo_control_method == 2:  # emotion from custom vectors
         vec = [vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8]
-        vec = normalize_emo_vec(vec)
+        vec = tts.normalize_emo_vec(vec, apply_bias=True)
     else:
         # don't use the emotion vector inputs for the other modes
         vec = None
