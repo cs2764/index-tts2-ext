@@ -73,8 +73,8 @@ psutil>=5.9.0
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS-2.git
-cd IndexTTS-2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 2. Install UV Package Manager
@@ -631,8 +631,8 @@ This deployment guide provides comprehensive instructions for setting up and mai
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS2.git
-cd IndexTTS2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 2. 安装UV包管理器

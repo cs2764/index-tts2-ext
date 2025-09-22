@@ -128,8 +128,8 @@ pip install -U uv
 ### 2. Clone Repository
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS2.git
-cd IndexTTS2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 3. Install Dependencies
@@ -290,8 +290,8 @@ pip install -U uv
 ### 2. 克隆仓库
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS2.git
-cd IndexTTS2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 3. 安装依赖

@@ -182,11 +182,11 @@ class MetadataManager:
         """Update project URLs with proper GitHub repository links."""
         # Note: Using placeholder URLs as per instructions to avoid real company details
         updated_urls = {
-            'Homepage': 'https://github.com/IndexTeam/IndexTTS-2',
-            'Repository': 'https://github.com/IndexTeam/IndexTTS-2.git',
-            'Documentation': 'https://github.com/IndexTeam/IndexTTS-2/blob/main/README.md',
-            'Issues': 'https://github.com/IndexTeam/IndexTTS-2/issues',
-            'Changelog': 'https://github.com/IndexTeam/IndexTTS-2/releases'
+            'Homepage': 'https://github.com/cs2764/index-tts2-ext',
+            'Repository': 'https://github.com/cs2764/index-tts2-ext.git',
+            'Documentation': 'https://github.com/cs2764/index-tts2-ext/blob/main/README.md',
+            'Issues': 'https://github.com/cs2764/index-tts2-ext/issues',
+            'Changelog': 'https://github.com/cs2764/index-tts2-ext/releases'
         }
         
         if self.current_metadata:

@@ -1,6 +1,6 @@
 ## 🌐 Language / 语言
 
-- [English Documentation](#english-documentation) 
+- [English Documentation](#english-documentation)
 - [中文文档](#中文文档)
 
 ---
@@ -9,7 +9,8 @@
 
 # IndexTTS2 - Advanced Text-to-Speech System
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/IndexTeam/IndexTTS2/releases)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/cs2764/index-tts2-ext/releases)
+[![Release Date](https://img.shields.io/badge/release-2025--09--22-green.svg)](https://github.com/cs2764/index-tts2-ext/releases/tag/v2.1.0)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/pytorch-2.8+-red.svg)](https://pytorch.org)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
@@ -55,8 +56,8 @@ pip install -U uv
 ### 2. Clone Repository
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS2.git
-cd IndexTTS2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 3. Install Dependencies
@@ -72,12 +73,14 @@ uv sync --extra webui --extra deepspeed
 ### 4. Download Models
 
 #### Via HuggingFace (International)
+
 ```bash
 uv tool install "huggingface_hub[cli]"
 hf download IndexTeam/IndexTTS-2 --local-dir=checkpoints
 ```
 
 #### Via ModelScope (China)
+
 ```bash
 uv tool install "modelscope"
 modelscope download --model IndexTeam/IndexTTS-2 --local_dir checkpoints
@@ -86,11 +89,13 @@ modelscope download --model IndexTeam/IndexTTS-2 --local_dir checkpoints
 ## 🚀 Quick Start
 
 ### Web Interface (Recommended)
+
 ```bash
 uv run webui.py
 ```
 
 ### Command Line Interface
+
 ```bash
 # Basic usage
 uv run indextts/cli.py "Hello world" -v examples/voice_01.wav
@@ -100,6 +105,7 @@ uv run indextts/cli.py "I'm so happy!" -v examples/voice_01.wav --emotion happy
 ```
 
 ### Python API
+
 ```python
 from indextts.infer_v2 import IndexTTS2
 
@@ -113,6 +119,26 @@ audio = tts.infer(
     emotion="happy"
 )
 ```
+
+## 🔄 Upgrading from Previous Versions
+
+### From v2.0.x to v2.1.0
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+uv sync --all-extras
+
+# Clear old cache (recommended)
+rm -rf checkpoints/hf_cache
+
+# Restart application
+uv run webui.py
+```
+
+**Note**: v2.1.0 is fully backward compatible - no configuration changes required!
 
 ## 🎯 Use Cases
 
@@ -156,12 +182,48 @@ uv run tests/regression_test.py
 └── pyproject.toml     # Package configuration
 ```
 
+## 📈 Version History
+
+### Latest Release: v2.1.0 (2025-09-22)
+
+**Production Ready Release** - Major feature update with enhanced stability and performance
+
+#### 🎉 Key Highlights
+
+- **Enhanced Web UI** with completely redesigned interface
+- **Auto-Save System** for long synthesis processes
+- **Advanced Audio Format Support** (MP3, M4A, M4B)
+- **Audio Input Optimization** - automatic trimming to prevent memory issues
+- **Parameter Normalization** for better user experience
+- **Docker Support** with multi-platform compatibility
+- **Comprehensive Testing Suite** with CI/CD pipeline
+
+#### 🔧 Technical Improvements
+
+- Updated to **PyTorch 2.8+** with **CUDA 12.8+** support
+- Full migration to **UV package manager**
+- Enhanced **FP16 inference** for faster processing
+- Optimized **memory management** and **VRAM usage**
+- Professional **GitHub-ready** project structure
+
+#### 🐛 Major Fixes
+
+- Fixed MP3 encoding and format conversion issues
+- Resolved VRAM overflow with long audio inputs
+- Improved UI responsiveness during long operations
+- Enhanced error handling with graceful degradation
+
+### Previous Versions
+
+- **v2.0.2** (2025-09-20): Initial bug fixes and stability improvements
+- **v2.0.0** (2025-09-15): Initial release with zero-shot voice cloning
+
 ## 📚 Documentation
 
 - **[API Reference](API_REFERENCE.md)**: Complete API documentation
 - **[Deployment Guide](DEPLOYMENT_GUIDE.md)**: Production deployment instructions
 - **[Contributing Guide](CONTRIBUTING.md)**: How to contribute to the project
-- **[Changelog](CHANGELOG.md)**: Version history and updates
+- **[Changelog](CHANGELOG.md)**: Detailed version history and updates
 
 ## 🤝 Contributing
 
@@ -178,9 +240,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- **Repository**: [GitHub](https://github.com/IndexTeam/IndexTTS2)
-- **Issues**: [Bug Reports & Feature Requests](https://github.com/IndexTeam/IndexTTS2/issues)
-- **Releases**: [Version History](https://github.com/IndexTeam/IndexTTS2/releases)
+- **Repository**: [GitHub](https://github.com/cs2764/index-tts2-ext)
+- **Issues**: [Bug Reports & Feature Requests](https://github.com/cs2764/index-tts2-ext/issues)
+- **Releases**: [Version History](https://github.com/cs2764/index-tts2-ext/releases)
 - **Documentation**: [Full Documentation](docs/)
 
 ## 🙏 Acknowledgments
@@ -191,11 +253,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Special thanks to the open-source community
 
 ---
+
 # 中文文档
 
 # IndexTTS2 - 先进的文本转语音系统
 
-[![版本](https://img.shields.io/badge/版本-2.1.0-blue.svg)](https://github.com/IndexTeam/IndexTTS2/releases)
+[![版本](https://img.shields.io/badge/版本-2.1.0-blue.svg)](https://github.com/cs2764/index-tts2-ext/releases)
+[![发布日期](https://img.shields.io/badge/发布-2025--09--22-green.svg)](https://github.com/cs2764/index-tts2-ext/releases/tag/v2.1.0)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/pytorch-2.8+-red.svg)](https://pytorch.org)
 [![许可证](https://img.shields.io/badge/许可证-MIT-yellow.svg)](LICENSE)
@@ -241,8 +305,8 @@ pip install -U uv
 ### 2. 克隆仓库
 
 ```bash
-git clone https://github.com/IndexTeam/IndexTTS2.git
-cd IndexTTS2
+git clone https://github.com/cs2764/index-tts2-ext.git
+cd index-tts2-ext
 ```
 
 ### 3. 安装依赖
@@ -258,12 +322,14 @@ uv sync --extra webui --extra deepspeed
 ### 4. 下载模型
 
 #### 通过HuggingFace（国际）
+
 ```bash
 uv tool install "huggingface_hub[cli]"
 hf download IndexTeam/IndexTTS-2 --local-dir=checkpoints
 ```
 
 #### 通过ModelScope（中国）
+
 ```bash
 uv tool install "modelscope"
 modelscope download --model IndexTeam/IndexTTS-2 --local_dir checkpoints
@@ -272,11 +338,13 @@ modelscope download --model IndexTeam/IndexTTS-2 --local_dir checkpoints
 ## 🚀 快速开始
 
 ### Web界面（推荐）
+
 ```bash
 uv run webui.py
 ```
 
 ### 命令行界面
+
 ```bash
 # 基本用法
 uv run indextts/cli.py "你好世界" -v examples/voice_01.wav
@@ -286,6 +354,7 @@ uv run indextts/cli.py "我很开心！" -v examples/voice_01.wav --emotion happ
 ```
 
 ### Python API
+
 ```python
 from indextts.infer_v2 import IndexTTS2
 
@@ -299,6 +368,26 @@ audio = tts.infer(
     emotion="happy"
 )
 ```
+
+## 🔄 从旧版本升级
+
+### 从 v2.0.x 升级到 v2.1.0
+
+```bash
+# 拉取最新更改
+git pull origin main
+
+# 更新依赖
+uv sync --all-extras
+
+# 清理旧缓存（推荐）
+rm -rf checkpoints/hf_cache
+
+# 重启应用
+uv run webui.py
+```
+
+**注意**: v2.1.0 完全向后兼容 - 无需更改配置！
 
 ## 🎯 应用场景
 
@@ -342,12 +431,48 @@ uv run tests/regression_test.py
 └── pyproject.toml     # 包配置
 ```
 
+## � 版本历史
+
+### 最新版本: v2.1.0 (2025年9月22日)
+
+**生产就绪版本** - 重大功能更新，增强稳定性和性能
+
+#### 🎉 主要亮点
+
+- **增强Web界面** 完全重新设计的界面
+- **自动保存系统** 支持长时间合成过程
+- **高级音频格式支持** (MP3, M4A, M4B)
+- **音频输入优化** - 自动裁剪防止内存问题
+- **参数归一化** 改善用户体验
+- **Docker支持** 多平台兼容性
+- **全面测试套件** 包含CI/CD流水线
+
+#### 🔧 技术改进
+
+- 更新至 **PyTorch 2.8+** 支持 **CUDA 12.8+**
+- 完全迁移至 **UV包管理器**
+- 增强 **FP16推理** 更快处理速度
+- 优化 **内存管理** 和 **显存使用**
+- 专业的 **GitHub就绪** 项目结构
+
+#### 🐛 主要修复
+
+- 修复MP3编码和格式转换问题
+- 解决长音频输入的显存溢出
+- 改进长时间操作的界面响应
+- 增强错误处理和优雅降级
+
+### 历史版本
+
+- **v2.0.2** (2025年9月20日): 初始错误修复和稳定性改进
+- **v2.0.0** (2025年9月15日): 初始发布，支持零样本语音克隆
+
 ## 📚 文档
 
 - **[API参考](API_REFERENCE.md)**: 完整的API文档
 - **[部署指南](DEPLOYMENT_GUIDE.md)**: 生产环境部署说明
 - **[贡献指南](CONTRIBUTING.md)**: 如何为项目做贡献
-- **[更新日志](CHANGELOG.md)**: 版本历史和更新
+- **[更新日志](CHANGELOG.md)**: 详细版本历史和更新
 
 ## 🤝 贡献
 
@@ -364,9 +489,9 @@ uv run tests/regression_test.py
 
 ## 🔗 链接
 
-- **仓库**: [GitHub](https://github.com/IndexTeam/IndexTTS2)
-- **问题**: [错误报告和功能请求](https://github.com/IndexTeam/IndexTTS2/issues)
-- **发布**: [版本历史](https://github.com/IndexTeam/IndexTTS2/releases)
+- **仓库**: [GitHub](https://github.com/cs2764/index-tts2-ext)
+- **问题**: [错误报告和功能请求](https://github.com/cs2764/index-tts2-ext/issues)
+- **发布**: [版本历史](https://github.com/cs2764/index-tts2-ext/releases)
 - **文档**: [完整文档](docs/)
 
 ## 🙏 致谢
