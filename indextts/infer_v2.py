@@ -35,6 +35,37 @@ from transformers import SeamlessM4TFeatureExtractor
 import random
 import torch.nn.functional as F
 
+# Import auto-save components
+from typing import Optional
+from indextts.auto_save.save_manager import IncrementalSaveManager
+
+def format_time(seconds):
+    """
+    将秒数格式化为"X小时Y分钟Z秒"的格式
+    
+    Args:
+        seconds (float): 秒数
+        
+    Returns:
+        str: 格式化的时间字符串
+    """
+    if seconds < 0:
+        return "0秒"
+    
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}小时")
+    if minutes > 0:
+        parts.append(f"{minutes}分钟")
+    if secs > 0 or not parts:  # 如果没有小时和分钟，至少显示秒
+        parts.append(f"{secs}秒")
+    
+    return "".join(parts)
+
 class IndexTTS2:
     def __init__(
             self, cfg_path="checkpoints/config.yaml", model_dir="checkpoints", use_fp16=False, device=None,
@@ -196,6 +227,16 @@ class IndexTTS2:
         # 进度引用显示（可选）
         self.gr_progress = None
         self.model_version = self.cfg.version if hasattr(self.cfg, "version") else None
+        
+        # Auto-save configuration
+        self.save_manager: Optional[IncrementalSaveManager] = None
+
+    def set_auto_save_config(self, save_interval: int, enabled: bool, output_path: str):
+        """Configure auto-save settings for current generation."""
+        if enabled:
+            self.save_manager = IncrementalSaveManager(save_interval, enabled, output_path)
+        else:
+            self.save_manager = None
 
     @torch.no_grad()
     def get_emb(self, input_features, attention_mask):
@@ -291,6 +332,43 @@ class IndexTTS2:
     def _set_gr_progress(self, value, desc):
         if self.gr_progress is not None:
             self.gr_progress(value, desc=desc)
+    
+    def set_auto_save_config(self, save_interval: int, enabled: bool, output_path: str,
+                           voice_name: Optional[str] = None, source_filename: Optional[str] = None):
+        """
+        Configure auto-save settings for current generation.
+        
+        Args:
+            save_interval: Steps between saves (1-10)
+            enabled: Whether auto-save is enabled
+            output_path: Path where final output will be saved
+            voice_name: Name of the voice being used for generation
+            source_filename: Original source filename if from uploaded file
+        """
+        if enabled:
+            self.save_manager = IncrementalSaveManager(
+                save_interval=save_interval,
+                enabled=enabled,
+                output_path=output_path,
+                voice_name=voice_name,
+                source_filename=source_filename
+            )
+            
+            # Set up callbacks for progress and error reporting
+            def progress_callback(message: str):
+                if self.gr_progress is not None:
+                    # Get current progress value from save manager status
+                    status = self.save_manager.get_save_status()
+                    current_step = status.get('current_step', 0)
+                    # Don't override main progress, just add save info
+                    pass
+            
+            def error_callback(error_message: str):
+                print(f"Auto-save error: {error_message}")
+            
+            self.save_manager.set_callbacks(progress_callback, error_callback)
+        else:
+            self.save_manager = None
 
     def _load_and_cut_audio(self,audio_path,max_audio_length_seconds,verbose=False,sr=None):
         if not sr:
@@ -418,10 +496,20 @@ class IndexTTS2:
         else:
             emo_cond_emb = self.cache_emo_cond
 
-        self._set_gr_progress(0.1, "text processing...")
-        text_tokens_list = self.tokenizer.tokenize(text)
-        segments = self.tokenizer.split_segments(text_tokens_list, max_text_tokens_per_segment)
+        # 文本处理阶段 - 带详细进度
+        def tokenize_progress_callback(progress, desc):
+            self._set_gr_progress(0.05 + 0.05 * progress, f"文本分词: {desc}")
+        
+        def segment_progress_callback(progress, desc):
+            self._set_gr_progress(0.10 + 0.05 * progress, f"文本分段: {desc}")
+        
+        self._set_gr_progress(0.05, "开始文本处理...")
+        text_tokens_list = self.tokenizer.tokenize(text, progress_callback=tokenize_progress_callback)
+        segments = self.tokenizer.split_segments(text_tokens_list, max_text_tokens_per_segment, progress_callback=segment_progress_callback)
         segments_count = len(segments)
+        
+        self._set_gr_progress(0.15, f"文本处理完成，共 {segments_count} 个段落")
+        
         if verbose:
             print("text_tokens_list:", text_tokens_list)
             print("segments count:", segments_count)
@@ -444,138 +532,271 @@ class IndexTTS2:
         s2mel_time = 0
         bigvgan_time = 0
         has_warned = False
-        for seg_idx, sent in enumerate(segments):
-            self._set_gr_progress(0.2 + 0.7 * seg_idx / segments_count,
-                                  f"speech synthesis {seg_idx + 1}/{segments_count}...")
-
-            text_tokens = self.tokenizer.convert_tokens_to_ids(sent)
-            text_tokens = torch.tensor(text_tokens, dtype=torch.int32, device=self.device).unsqueeze(0)
-            if verbose:
-                print(text_tokens)
-                print(f"text_tokens shape: {text_tokens.shape}, text_tokens type: {text_tokens.dtype}")
-                # debug tokenizer
-                text_token_syms = self.tokenizer.convert_ids_to_tokens(text_tokens[0].tolist())
-                print("text_token_syms is same as segment tokens", text_token_syms == sent)
-
-            m_start_time = time.perf_counter()
-            with torch.no_grad():
-                with torch.amp.autocast(text_tokens.device.type, enabled=self.dtype is not None, dtype=self.dtype):
-                    emovec = self.gpt.merge_emovec(
-                        spk_cond_emb,
-                        emo_cond_emb,
-                        torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
-                        torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
-                        alpha=emo_alpha
+        
+        # 时间统计
+        segment_times = []  # 记录每个段落的处理时间
+        total_start_time = time.perf_counter()
+        
+        # Initialize auto-save if configured
+        if self.save_manager:
+            self.save_manager.initialize_generation(output_path)
+            self._set_gr_progress(0.18, f"自动保存已启用，间隔: {self.save_manager.config.save_interval} 段落")
+        
+        # 开始推理阶段
+        self._set_gr_progress(0.2, f"开始音频推理，共 {segments_count} 个段落...")
+        
+        try:
+            for seg_idx, sent in enumerate(segments):
+                # 段落开始时间
+                segment_start_time = time.perf_counter()
+                
+                # 计算进度
+                progress = 0.2 + 0.75 * seg_idx / segments_count
+                
+                # 计算时间统计
+                elapsed_total = segment_start_time - total_start_time
+                if segment_times:
+                    avg_segment_time = sum(segment_times) / len(segment_times)
+                    remaining_segments = segments_count - seg_idx
+                    estimated_remaining = avg_segment_time * remaining_segments
+                    time_info = f"已用 {format_time(elapsed_total)}, 预计剩余 {format_time(estimated_remaining)}"
+                else:
+                    time_info = f"已用 {format_time(elapsed_total)}"
+                
+                # 显示段落进度 - include auto-save status
+                base_message = f"段落 {seg_idx + 1}/{segments_count}: 生成中... ({time_info})"
+                
+                # Add auto-save status to progress message
+                if self.save_manager:
+                    enhanced_message = self.save_manager.format_progress_with_save_status(
+                        base_message, seg_idx + 1
                     )
+                else:
+                    enhanced_message = base_message
+                
+                self._set_gr_progress(progress, enhanced_message)
 
-                    if emo_vector is not None:
-                        emovec = emovec_mat + (1 - torch.sum(weight_vector)) * emovec
-                        # emovec = emovec_mat
+                text_tokens = self.tokenizer.convert_tokens_to_ids(sent)
+                text_tokens = torch.tensor(text_tokens, dtype=torch.int32, device=self.device).unsqueeze(0)
+                if verbose:
+                    print(text_tokens)
+                    print(f"text_tokens shape: {text_tokens.shape}, text_tokens type: {text_tokens.dtype}")
+                    # debug tokenizer
+                    text_token_syms = self.tokenizer.convert_ids_to_tokens(text_tokens[0].tolist())
+                    print("text_token_syms is same as segment tokens", text_token_syms == sent)
 
-                    codes, speech_conditioning_latent = self.gpt.inference_speech(
-                        spk_cond_emb,
-                        text_tokens,
-                        emo_cond_emb,
-                        cond_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_cond_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_vec=emovec,
-                        do_sample=True,
-                        top_p=top_p,
-                        top_k=top_k,
-                        temperature=temperature,
-                        num_return_sequences=autoregressive_batch_size,
-                        length_penalty=length_penalty,
-                        num_beams=num_beams,
-                        repetition_penalty=repetition_penalty,
-                        max_generate_length=max_mel_tokens,
-                        **generation_kwargs
-                    )
+                # 完整的推理过程（不显示中间进度）
+                m_start_time = time.perf_counter()
+                with torch.no_grad():
+                    with torch.amp.autocast(text_tokens.device.type, enabled=self.dtype is not None, dtype=self.dtype):
+                        emovec = self.gpt.merge_emovec(
+                            spk_cond_emb,
+                            emo_cond_emb,
+                            torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
+                            torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
+                            alpha=emo_alpha
+                        )
 
-                gpt_gen_time += time.perf_counter() - m_start_time
-                if not has_warned and (codes[:, -1] != self.stop_mel_token).any():
-                    warnings.warn(
-                        f"WARN: generation stopped due to exceeding `max_mel_tokens` ({max_mel_tokens}). "
-                        f"Input text tokens: {text_tokens.shape[1]}. "
-                        f"Consider reducing `max_text_tokens_per_segment`({max_text_tokens_per_segment}) or increasing `max_mel_tokens`.",
-                        category=RuntimeWarning
-                    )
-                    has_warned = True
+                        if emo_vector is not None:
+                            emovec = emovec_mat + (1 - torch.sum(weight_vector)) * emovec
+                            # emovec = emovec_mat
 
-                code_lens = torch.tensor([codes.shape[-1]], device=codes.device, dtype=codes.dtype)
+                        codes, speech_conditioning_latent = self.gpt.inference_speech(
+                            spk_cond_emb,
+                            text_tokens,
+                            emo_cond_emb,
+                            cond_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_cond_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_vec=emovec,
+                            do_sample=True,
+                            top_p=top_p,
+                            top_k=top_k,
+                            temperature=temperature,
+                            num_return_sequences=autoregressive_batch_size,
+                            length_penalty=length_penalty,
+                            num_beams=num_beams,
+                            repetition_penalty=repetition_penalty,
+                            max_generate_length=max_mel_tokens,
+                            **generation_kwargs
+                        )
+
+                    gpt_gen_time += time.perf_counter() - m_start_time
+                    if not has_warned and (codes[:, -1] != self.stop_mel_token).any():
+                        warnings.warn(
+                            f"WARN: generation stopped due to exceeding `max_mel_tokens` ({max_mel_tokens}). "
+                            f"Input text tokens: {text_tokens.shape[1]}. "
+                            f"Consider reducing `max_text_tokens_per_segment`({max_text_tokens_per_segment}) or increasing `max_mel_tokens`.",
+                            category=RuntimeWarning
+                        )
+                        has_warned = True
+
+                    code_lens = torch.tensor([codes.shape[-1]], device=codes.device, dtype=codes.dtype)
                 #                 if verbose:
                 #                     print(codes, type(codes))
                 #                     print(f"codes shape: {codes.shape}, codes type: {codes.dtype}")
                 #                     print(f"code len: {code_lens}")
 
-                code_lens = []
-                for code in codes:
-                    if self.stop_mel_token not in code:
-                        code_lens.append(len(code))
-                        code_len = len(code)
+                    code_lens = []
+                    for code in codes:
+                        if self.stop_mel_token not in code:
+                            code_lens.append(len(code))
+                            code_len = len(code)
+                        else:
+                            len_ = (code == self.stop_mel_token).nonzero(as_tuple=False)[0] + 1
+                            code_len = len_ - 1
+                        code_lens.append(code_len)
+                    codes = codes[:, :code_len]
+                    code_lens = torch.LongTensor(code_lens)
+                    code_lens = code_lens.to(self.device)
+                    if verbose:
+                        print(codes, type(codes))
+                        print(f"fix codes shape: {codes.shape}, codes type: {codes.dtype}")
+                        print(f"code len: {code_lens}")
+
+                    m_start_time = time.perf_counter()
+                    use_speed = torch.zeros(spk_cond_emb.size(0)).to(spk_cond_emb.device).long()
+                    with torch.amp.autocast(text_tokens.device.type, enabled=self.dtype is not None, dtype=self.dtype):
+                        latent = self.gpt(
+                            speech_conditioning_latent,
+                            text_tokens,
+                            torch.tensor([text_tokens.shape[-1]], device=text_tokens.device),
+                            codes,
+                            torch.tensor([codes.shape[-1]], device=text_tokens.device),
+                            emo_cond_emb,
+                            cond_mel_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_cond_mel_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_vec=emovec,
+                            use_speed=use_speed,
+                        )
+                        gpt_forward_time += time.perf_counter() - m_start_time
+
+                    dtype = None
+                    with torch.amp.autocast(text_tokens.device.type, enabled=dtype is not None, dtype=dtype):
+                        m_start_time = time.perf_counter()
+                        diffusion_steps = 25
+                        inference_cfg_rate = 0.7
+                        latent = self.s2mel.models['gpt_layer'](latent)
+                        S_infer = self.semantic_codec.quantizer.vq2emb(codes.unsqueeze(1))
+                        S_infer = S_infer.transpose(1, 2)
+                        S_infer = S_infer + latent
+                        target_lengths = (code_lens * 1.72).long()
+
+                        cond = self.s2mel.models['length_regulator'](S_infer,
+                                                                     ylens=target_lengths,
+                                                                     n_quantizers=3,
+                                                                     f0=None)[0]
+                        cat_condition = torch.cat([prompt_condition, cond], dim=1)
+                        vc_target = self.s2mel.models['cfm'].inference(cat_condition,
+                                                                       torch.LongTensor([cat_condition.size(1)]).to(
+                                                                           cond.device),
+                                                                       ref_mel, style, None, diffusion_steps,
+                                                                       inference_cfg_rate=inference_cfg_rate)
+                        vc_target = vc_target[:, :, ref_mel.size(-1):]
+                        s2mel_time += time.perf_counter() - m_start_time
+
+                        m_start_time = time.perf_counter()
+                        wav = self.bigvgan(vc_target.float()).squeeze().unsqueeze(0)
+                        print(wav.shape)
+                        bigvgan_time += time.perf_counter() - m_start_time
+                        wav = wav.squeeze(1)
+
+                    wav = torch.clamp(32767 * wav, -32767.0, 32767.0)
+                    if verbose:
+                        print(f"wav shape: {wav.shape}", "min:", wav.min(), "max:", wav.max())
+                    # wavs.append(wav[:, :-512])
+                    wavs.append(wav.cpu())  # to cpu before saving
+                    
+                    # Auto-save integration: add segment to save manager
+                    if self.save_manager:
+                        # Convert wav to float32 for auto-save (normalized to [-1, 1])
+                        wav_normalized = wav.cpu().float() / 32767.0
+                        segment_info = {
+                            'text': ' '.join(sent) if isinstance(sent, list) else str(sent),
+                            'segment_index': seg_idx,
+                            'generation_time': time.perf_counter() - segment_start_time
+                        }
+                        
+                        # Add segment and check if save was triggered
+                        save_triggered = self.save_manager.add_audio_segment(
+                            wav_normalized, seg_idx + 1, segment_info
+                        )
+                        
+                        if save_triggered and verbose:
+                            print(f"Auto-save triggered at segment {seg_idx + 1}")
+                    
+                    # 计算段落完成时间
+                    segment_end_time = time.perf_counter()
+                    segment_duration = segment_end_time - segment_start_time
+                    segment_times.append(segment_duration)
+                    
+                    # 更新时间统计
+                    elapsed_total = segment_end_time - total_start_time
+                    avg_segment_time = sum(segment_times) / len(segment_times)
+                    remaining_segments = segments_count - (seg_idx + 1)
+                    estimated_remaining = avg_segment_time * remaining_segments
+                    
+                    # 段落完成进度 - include auto-save status
+                    completed_progress = 0.2 + 0.75 * (seg_idx + 1) / segments_count
+                    base_message = f"段落 {seg_idx + 1}/{segments_count}: 完成 ✓ (用时 {format_time(segment_duration)}, 总计 {format_time(elapsed_total)}, 预计剩余 {format_time(estimated_remaining)})"
+                    
+                    # Add auto-save status to progress message
+                    if self.save_manager:
+                        enhanced_message = self.save_manager.format_progress_with_save_status(
+                            base_message, seg_idx + 1
+                        )
                     else:
-                        len_ = (code == self.stop_mel_token).nonzero(as_tuple=False)[0] + 1
-                        code_len = len_ - 1
-                    code_lens.append(code_len)
-                codes = codes[:, :code_len]
-                code_lens = torch.LongTensor(code_lens)
-                code_lens = code_lens.to(self.device)
-                if verbose:
-                    print(codes, type(codes))
-                    print(f"fix codes shape: {codes.shape}, codes type: {codes.dtype}")
-                    print(f"code len: {code_lens}")
-
-                m_start_time = time.perf_counter()
-                use_speed = torch.zeros(spk_cond_emb.size(0)).to(spk_cond_emb.device).long()
-                with torch.amp.autocast(text_tokens.device.type, enabled=self.dtype is not None, dtype=self.dtype):
-                    latent = self.gpt(
-                        speech_conditioning_latent,
-                        text_tokens,
-                        torch.tensor([text_tokens.shape[-1]], device=text_tokens.device),
-                        codes,
-                        torch.tensor([codes.shape[-1]], device=text_tokens.device),
-                        emo_cond_emb,
-                        cond_mel_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_cond_mel_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_vec=emovec,
-                        use_speed=use_speed,
+                        enhanced_message = base_message
+                    
+                    self._set_gr_progress(completed_progress, enhanced_message)
+                
+        except (KeyboardInterrupt, SystemExit, GeneratorExit) as e:
+            # Handle generation cancellation
+            print(f">> Generation cancelled: {type(e).__name__}")
+            
+            if self.save_manager:
+                try:
+                    # Handle cancellation with proper cleanup
+                    cancellation_result = self.save_manager.handle_generation_cancellation(
+                        preserve_partial_results=True
                     )
-                    gpt_forward_time += time.perf_counter() - m_start_time
-
-                dtype = None
-                with torch.amp.autocast(text_tokens.device.type, enabled=dtype is not None, dtype=dtype):
-                    m_start_time = time.perf_counter()
-                    diffusion_steps = 25
-                    inference_cfg_rate = 0.7
-                    latent = self.s2mel.models['gpt_layer'](latent)
-                    S_infer = self.semantic_codec.quantizer.vq2emb(codes.unsqueeze(1))
-                    S_infer = S_infer.transpose(1, 2)
-                    S_infer = S_infer + latent
-                    target_lengths = (code_lens * 1.72).long()
-
-                    cond = self.s2mel.models['length_regulator'](S_infer,
-                                                                 ylens=target_lengths,
-                                                                 n_quantizers=3,
-                                                                 f0=None)[0]
-                    cat_condition = torch.cat([prompt_condition, cond], dim=1)
-                    vc_target = self.s2mel.models['cfm'].inference(cat_condition,
-                                                                   torch.LongTensor([cat_condition.size(1)]).to(
-                                                                       cond.device),
-                                                                   ref_mel, style, None, diffusion_steps,
-                                                                   inference_cfg_rate=inference_cfg_rate)
-                    vc_target = vc_target[:, :, ref_mel.size(-1):]
-                    s2mel_time += time.perf_counter() - m_start_time
-
-                    m_start_time = time.perf_counter()
-                    wav = self.bigvgan(vc_target.float()).squeeze().unsqueeze(0)
-                    print(wav.shape)
-                    bigvgan_time += time.perf_counter() - m_start_time
-                    wav = wav.squeeze(1)
-
-                wav = torch.clamp(32767 * wav, -32767.0, 32767.0)
-                if verbose:
-                    print(f"wav shape: {wav.shape}", "min:", wav.min(), "max:", wav.max())
-                # wavs.append(wav[:, :-512])
-                wavs.append(wav.cpu())  # to cpu before saving
+                    
+                    if cancellation_result.get('partial_results_preserved'):
+                        print(f">> Partial results preserved: {cancellation_result.get('partial_file_path')}")
+                    
+                    if cancellation_result.get('cleanup_performed'):
+                        print(">> Cleanup completed after cancellation")
+                    
+                    # Re-raise the cancellation exception after cleanup
+                    raise e
+                    
+                except Exception as cleanup_error:
+                    print(f">> Error during cancellation cleanup: {cleanup_error}")
+                    # Still re-raise the original cancellation
+                    raise e
+            else:
+                # No save manager, just re-raise
+                raise e
+                
+        except Exception as e:
+            # Handle other errors during generation
+            print(f">> Generation error: {str(e)}")
+            
+            if self.save_manager:
+                try:
+                    # Try to preserve partial results on error
+                    cancellation_result = self.save_manager.handle_generation_cancellation(
+                        preserve_partial_results=True
+                    )
+                    
+                    if cancellation_result.get('partial_results_preserved'):
+                        print(f">> Partial results preserved after error: {cancellation_result.get('partial_file_path')}")
+                    
+                except Exception as cleanup_error:
+                    print(f">> Error during error cleanup: {cleanup_error}")
+            
+            # Re-raise the original error
+            raise e
+            
         end_time = time.perf_counter()
 
         self._set_gr_progress(0.9, "saving audio...")
@@ -593,15 +814,60 @@ class IndexTTS2:
         # save audio
         wav = wav.cpu()  # to cpu
         if output_path:
-            # 直接保存音频到指定路径中
-            if os.path.isfile(output_path):
-                os.remove(output_path)
-                print(">> remove old wav file:", output_path)
-            if os.path.dirname(output_path) != "":
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            torchaudio.save(output_path, wav.type(torch.int16), sampling_rate)
-            print(">> wav file saved to:", output_path)
-            return output_path
+            try:
+                if self.save_manager:
+                    # Use auto-save manager to finalize output with comprehensive cleanup
+                    self._set_gr_progress(0.95, "正在完成自动保存...")
+                    
+                    try:
+                        # Finalize successful generation with automatic cleanup
+                        finalization_result = self.save_manager.finalize_generation_success()
+                        final_path = finalization_result.get('final_path')
+                        
+                        if final_path:
+                            print(">> Auto-save finalized to:", final_path)
+                            if finalization_result.get('cleanup_performed'):
+                                freed_mb = finalization_result.get('cleanup_details', {}).get('total_size_freed_mb', 0.0)
+                                print(f">> Cleanup completed, freed {freed_mb:.1f} MB")
+                        else:
+                            # Fallback to original method if new method fails
+                            final_path = self.save_manager.finalize_output()
+                            self.save_manager.cleanup_temp_files()
+                            print(">> Auto-save finalized to:", final_path)
+                        
+                        return final_path
+                        
+                    except Exception as e:
+                        print(f">> Error during finalization: {e}")
+                        # Fallback to original cleanup method
+                        try:
+                            final_path = self.save_manager.finalize_output()
+                            self.save_manager.cleanup_temp_files()
+                            return final_path
+                        except Exception as fallback_error:
+                            print(f">> Fallback finalization also failed: {fallback_error}")
+                            raise e
+                else:
+                    # Traditional save method
+                    if os.path.isfile(output_path):
+                        os.remove(output_path)
+                        print(">> remove old wav file:", output_path)
+                    if os.path.dirname(output_path) != "":
+                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    torchaudio.save(output_path, wav.type(torch.int16), sampling_rate)
+                    print(">> wav file saved to:", output_path)
+                    return output_path
+            except Exception as e:
+                print(f">> Auto-save finalization failed: {str(e)}")
+                # Fallback to traditional save
+                if os.path.isfile(output_path):
+                    os.remove(output_path)
+                    print(">> remove old wav file:", output_path)
+                if os.path.dirname(output_path) != "":
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                torchaudio.save(output_path, wav.type(torch.int16), sampling_rate)
+                print(">> wav file saved to:", output_path)
+                return output_path
         else:
             # 返回以符合Gradio的格式要求
             wav_data = wav.type(torch.int16)

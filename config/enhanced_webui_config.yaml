@@ -1,0 +1,311 @@
+# Enhanced WebUI Configuration
+# Configuration for enhanced features in IndexTTS2 WebUI
+
+# Enhanced Features Control
+enhanced_features:
+  enabled: true
+  
+  # File Processing Configuration
+  file_processing:
+    # Maximum file size for upload (in MB)
+    max_file_size_mb: 100
+    
+    # Preview settings
+    preview:
+      max_lines: 40
+      enable_caching: true
+      cache_max_entries: 100
+      cache_max_age_hours: 24
+    
+    # Supported file formats
+    supported_formats:
+      - txt
+      - epub
+    
+    # Text cleaning settings
+    text_cleaning:
+      enabled_by_default: true
+      merge_empty_lines: true
+      remove_excess_whitespace: true
+      clean_special_characters: true
+      normalize_punctuation: true
+    
+    # Encoding detection
+    encoding:
+      supported_encodings:
+        - utf-8
+        - gbk
+        - gb2312
+        - big5
+      fallback_encoding: utf-8
+  
+  # Chapter Recognition Configuration
+  chapter_recognition:
+    enabled_by_default: false
+    confidence_threshold: 0.7
+    max_chapters_to_display: 10
+    
+    # Chapter patterns
+    patterns:
+      chinese:
+        - "第[一二三四五六七八九十\\d]+章\\s+[^\\n]+"
+        - "第[一二三四五六七八九十\\d]+回\\s+[^\\n]+"
+        - "第[一二三四五六七八九十\\d]+节\\s+[^\\n]+"
+        - "第[一二三四五六七八九十\\d]+部\\s+[^\\n]+"
+        - "第[一二三四五六七八九十\\d]+卷\\s+[^\\n]+"
+      english:
+        - "Chapter\\s+\\d+[:\\s]+[^\\n]+"
+        - "Part\\s+\\d+[:\\s]+[^\\n]+"
+        - "Section\\s+\\d+[:\\s]+[^\\n]+"
+      numbered:
+        - "\\d+\\.[\\s]*[^\\n]+"
+        - "\\d+\\)[\\s]*[^\\n]+"
+  
+  # Audio Format Configuration
+  audio_formats:
+    default_format: mp3
+    
+    # MP3 settings
+    mp3:
+      default_bitrate: 64
+      supported_bitrates: [32, 64, 96, 128, 192, 256, 320]
+    
+    # M4B settings
+    m4b:
+      enable_chapters: true
+      enable_cover_art: true
+      default_cover_path: "assets/default_cover.jpg"
+    
+    # Segmentation settings
+    segmentation:
+      default_chapters_per_file: 20
+      max_chapters_per_file: 200
+      min_chapters_per_file: 1
+      epub_only_when_chapter_recognition_disabled: true
+  
+  # Voice Management Configuration
+  voice_management:
+    samples_directory: "samples"
+    auto_create_directory: true
+    
+    # Supported voice formats
+    supported_formats:
+      - wav
+      - mp3
+    
+    # Voice validation
+    validation:
+      min_duration_seconds: 1.0
+      max_duration_seconds: 30.0
+      required_sample_rate: 22050
+  
+  # Output Management Configuration
+  output_management:
+    output_directory: "outputs"
+    auto_create_directory: true
+    auto_save_enabled_by_default: true
+    
+    # Filename generation
+    filename_format: "{source_name}_{date}_{voice_name}.{format}"
+    date_format: "%Y%m%d_%H%M%S"
+    
+    # Segmented files
+    segmented_files:
+      create_subdirectory: true
+      subdirectory_format: "{source_name}_{date}_{voice_name}_segments"
+      segment_filename_format: "{start_chapter}-{end_chapter}.{format}"
+  
+  # Background Task Management
+  task_management:
+    enabled: true
+    max_concurrent_tasks: 3
+    task_timeout_minutes: 60
+    
+    # Auto background processing threshold
+    auto_background_threshold_chars: 10000
+    
+    # Task persistence
+    persistence:
+      enabled: true
+      max_history_entries: 100
+      cleanup_completed_after_hours: 24
+  
+  # UI Theme Configuration
+  ui_theme:
+    # Theme settings
+    default_theme: auto  # auto, light, dark
+    
+    # Dark theme colors
+    dark_theme:
+      primary_bg: "#1f2937"
+      secondary_bg: "#374151"
+      primary_text: "#f9fafb"
+      secondary_text: "#d1d5db"
+      accent_color: "#3b82f6"
+      success_color: "#10b981"
+      warning_color: "#f59e0b"
+      error_color: "#ef4444"
+      border_color: "#4b5563"
+      hover_bg: "#4b5563"
+      active_bg: "#6b7280"
+    
+    # Light theme colors
+    light_theme:
+      primary_bg: "#ffffff"
+      secondary_bg: "#f9fafb"
+      primary_text: "#111827"
+      secondary_text: "#6b7280"
+      accent_color: "#3b82f6"
+      success_color: "#059669"
+      warning_color: "#d97706"
+      error_color: "#dc2626"
+      border_color: "#d1d5db"
+      hover_bg: "#f3f4f6"
+      active_bg: "#e5e7eb"
+    
+    # Component styling
+    components:
+      file_upload:
+        border_radius: "8px"
+        padding: "16px"
+        border_width: "2px"
+      
+      preview_area:
+        max_height: "400px"
+        font_family: "monospace"
+        font_size: "14px"
+      
+      chapter_preview:
+        max_height: "300px"
+        show_confidence_scores: true
+      
+      progress_bar:
+        height: "8px"
+        border_radius: "4px"
+        animation_duration: "0.3s"
+      
+      status_message:
+        border_radius: "6px"
+        padding: "12px 16px"
+        margin: "8px 0"
+  
+  # Performance Configuration
+  performance:
+    # Memory management
+    memory:
+      enable_optimization: true
+      max_memory_usage_percent: 80
+      cleanup_threshold_percent: 90
+    
+    # Caching
+    caching:
+      enable_preview_cache: true
+      enable_chapter_cache: true
+      cache_cleanup_interval_minutes: 30
+    
+    # Processing optimization
+    processing:
+      enable_parallel_processing: true
+      max_worker_threads: 4
+      chunk_size_lines: 1000
+      
+    # UI optimization
+    ui:
+      debounce_delay_ms: 300
+      lazy_loading: true
+      virtual_scrolling: false
+
+# Environment Variables Support
+# These settings can be overridden by environment variables with the prefix INDEXTTS_
+environment_variables:
+  # File processing
+  - name: INDEXTTS_MAX_FILE_SIZE_MB
+    config_path: enhanced_features.file_processing.max_file_size_mb
+    type: int
+  
+  - name: INDEXTTS_PREVIEW_MAX_LINES
+    config_path: enhanced_features.file_processing.preview.max_lines
+    type: int
+  
+  - name: INDEXTTS_SAMPLES_DIRECTORY
+    config_path: enhanced_features.voice_management.samples_directory
+    type: str
+  
+  - name: INDEXTTS_OUTPUT_DIRECTORY
+    config_path: enhanced_features.output_management.output_directory
+    type: str
+  
+  - name: INDEXTTS_MAX_CONCURRENT_TASKS
+    config_path: enhanced_features.task_management.max_concurrent_tasks
+    type: int
+  
+  - name: INDEXTTS_DEFAULT_THEME
+    config_path: enhanced_features.ui_theme.default_theme
+    type: str
+  
+  - name: INDEXTTS_ENABLE_ENHANCED_FEATURES
+    config_path: enhanced_features.enabled
+    type: bool
+
+# Deployment Configuration
+deployment:
+  # Production settings
+  production:
+    # Security
+    security:
+      enable_file_validation: true
+      max_upload_size_mb: 50
+      allowed_file_extensions: [".txt", ".epub"]
+      sanitize_filenames: true
+    
+    # Performance
+    performance:
+      enable_compression: true
+      cache_static_assets: true
+      optimize_images: true
+    
+    # Logging
+    logging:
+      level: INFO
+      enable_access_logs: true
+      log_file: "logs/enhanced_webui.log"
+      max_log_size_mb: 100
+      backup_count: 5
+  
+  # Development settings
+  development:
+    # Debug options
+    debug:
+      enable_debug_mode: true
+      show_performance_metrics: true
+      enable_hot_reload: true
+    
+    # Testing
+    testing:
+      enable_test_data: true
+      mock_external_services: false
+    
+    # Logging
+    logging:
+      level: DEBUG
+      enable_console_output: true
+
+# Feature Flags
+feature_flags:
+  # Experimental features
+  experimental:
+    enable_ai_chapter_detection: false
+    enable_voice_cloning_preview: false
+    enable_batch_processing: false
+    enable_cloud_storage: false
+  
+  # Beta features
+  beta:
+    enable_advanced_audio_effects: false
+    enable_multi_language_ui: false
+    enable_collaborative_editing: false
+  
+  # Deprecated features (for backward compatibility)
+  deprecated:
+    legacy_file_upload: false
+    old_theme_system: false

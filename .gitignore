@@ -29,3 +29,63 @@ desktop.ini
 /checkpoints/*
 !/checkpoints/*.yaml
 /outputs/
+
+# User-generated content and logs
+*.log
+/logs/
+/prompts/
+
+# Python cache and environments
+*.pyd
+*.pyo
+.env
+.env.*
+.pytest_cache/
+
+# Model checkpoints and cache (keep config files)
+/checkpoints/*.bin
+/checkpoints/*.pt
+/checkpoints/*.pth
+/checkpoints/*.safetensors
+/checkpoints/.cache/
+/checkpoints/qwen0.6bemo4-merge/
+
+# Temporary and debug files
+*.bak
+*.temp
+*.tmp
+*_debug.*
+*_temp.*
+debug_*
+debug_*.wav
+temp_*
+
+# Audio processing temporary files
+*.mp3.tmp
+*.wav.tmp
+debug_*.wav
+multiple_test_*
+test_*.wav
+
+# Development and IDE files
+*.sublime-*
+*.swo
+*.swp
+*~
+.Python
+.Spotlight-V100
+.Trashes
+.coverage
+.tox/
+.uv_cache/
+ehthumbs.db
+htmlcov/
+
+# Kiro IDE configuration
+/.kiro/
+
+# User-generated sample files (keep only examples)
+/samples/*.mp3
+/samples/*.wav
+!/samples/README.md
+WARP.md

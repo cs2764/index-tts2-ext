@@ -310,21 +310,42 @@ class TextTokenizer:
             tokens = [tokens]
         return [self.sp_model.PieceToId(token) for token in tokens]
 
-    def tokenize(self, text: str) -> List[str]:
-        return self.encode(text, out_type=str)
+    def tokenize(self, text: str, progress_callback=None) -> List[str]:
+        return self.encode(text, out_type=str, progress_callback=progress_callback)
 
-    def encode(self, text: str, **kwargs):
+    def encode(self, text: str, progress_callback=None, **kwargs):
         if len(text) == 0:
             return []
         if len(text.strip()) == 1:
             return self.sp_model.Encode(text, out_type=kwargs.pop("out_type", int), **kwargs)
-        # 预处理
+        
+        # 预处理阶段
+        if progress_callback:
+            progress_callback(0.1, "开始文本预处理...")
+        
         if self.normalizer:
+            if progress_callback:
+                progress_callback(0.3, "正在标准化文本...")
             text = self.normalizer.normalize(text)
+        
         if len(self.pre_tokenizers) > 0:
-            for pre_tokenizer in self.pre_tokenizers:
+            if progress_callback:
+                progress_callback(0.5, "正在应用预分词器...")
+            for i, pre_tokenizer in enumerate(self.pre_tokenizers):
                 text = pre_tokenizer(text)
-        return self.sp_model.Encode(text, out_type=kwargs.pop("out_type", int), **kwargs)
+                if progress_callback:
+                    progress = 0.5 + 0.2 * (i + 1) / len(self.pre_tokenizers)
+                    progress_callback(progress, f"预分词器 {i+1}/{len(self.pre_tokenizers)}")
+        
+        if progress_callback:
+            progress_callback(0.8, "正在进行分词...")
+        
+        result = self.sp_model.Encode(text, out_type=kwargs.pop("out_type", int), **kwargs)
+        
+        if progress_callback:
+            progress_callback(1.0, f"分词完成，共 {len(result)} 个token")
+        
+        return result
 
     def batch_encode(self, texts: List[str], **kwargs):
         # 预处理
@@ -422,10 +443,18 @@ class TextTokenizer:
         "▁?",
         "▁...", # ellipsis
     ]
-    def split_segments(self, tokenized: List[str], max_text_tokens_per_segment=120) -> List[List[str]]:
-        return TextTokenizer.split_segments_by_token(
+    def split_segments(self, tokenized: List[str], max_text_tokens_per_segment=120, progress_callback=None) -> List[List[str]]:
+        if progress_callback:
+            progress_callback(0.0, "开始分段处理...")
+        
+        result = TextTokenizer.split_segments_by_token(
             tokenized, self.punctuation_marks_tokens, max_text_tokens_per_segment=max_text_tokens_per_segment
         )
+        
+        if progress_callback:
+            progress_callback(1.0, f"分段完成，共 {len(result)} 个段落")
+        
+        return result
 
 
 if __name__ == "__main__":
